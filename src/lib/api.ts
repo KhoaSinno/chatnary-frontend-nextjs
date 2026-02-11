@@ -1,4 +1,4 @@
-// API client for Chatnary Backend matching https://chatnary.up.railway.app/api/v1/docs
+// API client for Chatnary Backend matching https://chatnary.up.railway.app/docs
 import {
     USE_MOCK_DATA,
     createMockChat,
@@ -22,8 +22,8 @@ import {
 } from "@/lib/types";
 import Cookies from "js-cookie";
 
-const API_BASE_URL = "https://chatnary.up.railway.app";
-const COOKIE_NAME = "chatnary_token";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const COOKIE_NAME = process.env.NEXT_PUBLIC_COOKIE_NAME || "CHATNARY_COOKIE";
 
 // Generic API Response wrapper
 export interface ApiResponse<T> {
@@ -182,7 +182,7 @@ class ApiClient {
   // ==================== AUTH ====================
 
   async login(credentials: LoginRequest): Promise<ApiResponse<AuthResponse>> {
-    const response = await this.request<any>("/api/v1/auth/login", {
+    const response = await this.request<any>("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
     });
@@ -205,14 +205,14 @@ class ApiClient {
   }
 
   async register(data: RegisterRequest): Promise<ApiResponse<void>> {
-    return this.request<void>("/api/v1/auth/register", {
+    return this.request<void>("/auth/register", {
       method: "POST",
       body: JSON.stringify({ email: data.email, password: data.password }),
     });
   }
 
   async logout(): Promise<ApiResponse<void>> {
-    const res = await this.request<void>("/api/v1/auth/logout", {
+    const res = await this.request<void>("/auth/logout", {
       method: "POST",
     });
     this.clearToken();
@@ -231,7 +231,7 @@ class ApiClient {
       return this.createSuccessResponse(getMockProjects());
     }
     
-    return this.request<Project[]>("/api/v1/project");
+    return this.request<Project[]>("/project");
   }
 
   async createProject(
@@ -247,7 +247,7 @@ class ApiClient {
       return this.createSuccessResponse(newProject);
     }
     
-    return this.request<Project>("/api/v1/project", {
+    return this.request<Project>("/project", {
       method: "POST",
       body: JSON.stringify(project),
     });
@@ -270,7 +270,7 @@ class ApiClient {
       return this.createErrorResponse('Project not found');
     }
     
-    return this.request<Project>(`/api/v1/project/${id}`, {
+    return this.request<Project>(`/project/${id}`, {
       method: "PATCH",
       body: JSON.stringify(project),
     });
@@ -290,13 +290,13 @@ class ApiClient {
       return this.createErrorResponse('Project not found');
     }
     
-    return this.request<void>(`/api/v1/project/${id}`, {
+    return this.request<void>(`/project/${id}`, {
       method: "DELETE",
     });
   }
 
   async getProject(id: string): Promise<ApiResponse<Project>> {
-    return this.request<Project>(`/api/v1/project/${id}`);
+    return this.request<Project>(`/project/${id}`);
   }
 
   // ==================== DOCUMENTS ====================
@@ -312,7 +312,7 @@ class ApiClient {
       // But usually uploads need linkage. We will send it.
       formData.append("projectId", projectId);
 
-      const url = `${this.baseUrl}/api/v1/document/upload/files`;
+      const url = `${this.baseUrl}/document/upload/files`;
       const response = await fetch(url, {
         method: "POST",
         headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
@@ -338,25 +338,25 @@ class ApiClient {
   async getProjectDocuments(
     projectId: string
   ): Promise<ApiResponse<Document[]>> {
-    return this.request<Document[]>(`/api/v1/project/${projectId}/documents`);
+    return this.request<Document[]>(`/project/${projectId}/documents`);
   }
 
   // GET /document/:documentId - Get document detail
   async getDocument(documentId: string): Promise<ApiResponse<Document>> {
-    return this.request<Document>(`/api/v1/document/${documentId}`);
+    return this.request<Document>(`/document/${documentId}`);
   }
 
   getDocumentDownloadUrl(documentId: string): string {
-    return `${this.baseUrl}/api/v1/document/${documentId}/download`;
+    return `${this.baseUrl}/document/${documentId}/download`;
   }
 
   getDocumentPreviewUrl(documentId: string): string {
-    return `${this.baseUrl}/api/v1/document/${documentId}/preview`;
+    return `${this.baseUrl}/document/${documentId}/preview`;
   }
 
   // DELETE /document/:documentId - Delete document
   async deleteDocument(documentId: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/api/v1/document/${documentId}`, {
+    return this.request<void>(`/document/${documentId}`, {
       method: "DELETE",
     });
   }
@@ -371,7 +371,7 @@ class ApiClient {
 
     // Fallback search, verify if backend handles it
     return this.request<Document[]>(
-      `/api/v1/document/search?${params.toString()}`
+      `/document/search?${params.toString()}`
     );
   }
 
@@ -393,7 +393,7 @@ class ApiClient {
     }
     
     // Original API call
-    return this.request<ChatSession>("/api/v1/chat", {
+    return this.request<ChatSession>("/chat", {
       method: "POST",
       body: JSON.stringify(request),
     });
@@ -412,12 +412,12 @@ class ApiClient {
     }
     
     // Original API call
-    return this.request<ChatSession[]>(`/api/v1/project/${projectId}/chats`);
+    return this.request<ChatSession[]>(`/project/${projectId}/chats`);
   }
 
   async getChat(chatId: string): Promise<ApiResponse<ChatSession>> {
     // Already mocked in useChat hook
-    return this.request<ChatSession>(`/api/v1/chat/${chatId}`);
+    return this.request<ChatSession>(`/chat/${chatId}`);
   }
 
   async updateChat(
@@ -437,7 +437,7 @@ class ApiClient {
     }
     
     // Original API call
-    return this.request<ChatSession>(`/api/v1/chat/user/${chatId}`, {
+    return this.request<ChatSession>(`/chat/user/${chatId}`, {
       method: "PATCH",
       body: JSON.stringify(request),
     });
@@ -457,7 +457,7 @@ class ApiClient {
     }
     
     // Original API call
-    return this.request<void>(`/api/v1/chat/user/${chatId}`, {
+    return this.request<void>(`/chat/user/${chatId}`, {
       method: "DELETE",
     });
   }
@@ -469,7 +469,7 @@ class ApiClient {
     chatId: string
   ): Promise<ApiResponse<Message[]>> {
     return this.request<Message[]>(
-      `/api/v1/project/${projectId}/chats/${chatId}/messages`
+      `/project/${projectId}/chats/${chatId}/messages`
     );
   }
 
@@ -478,7 +478,7 @@ class ApiClient {
     request: SendMessageDto
   ): Promise<ApiResponse<Message>> {
     return this.request<Message>(
-      `/api/v1/project/${projectId}/chats/messages`,
+      `/project/${projectId}/chats/messages`,
       {
         method: "POST",
         body: JSON.stringify(request),
