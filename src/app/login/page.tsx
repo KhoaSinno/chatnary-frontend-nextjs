@@ -31,8 +31,9 @@ export default function LoginPage() {
       const result = await login({ email, password });
 
       if (result.success) {
-        // Use window.location for more reliable redirect after auth state change
-        window.location.href = "/dashboard";
+        // Keep AuthProvider mounted so the in-memory access token survives the
+        // transition. A hard navigation would force a refresh-token roundtrip.
+        router.replace("/dashboard");
       } else {
         setError(result.error || "Đăng nhập thất bại");
       }

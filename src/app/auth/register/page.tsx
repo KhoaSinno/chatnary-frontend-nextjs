@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui';
-import { authApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Check, Lock, Mail } from 'lucide-react';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login, register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,15 +38,14 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      // Assuming name is not supported by backend yet based on API analysis
-      const response = await authApi.register({ email, password, name: email.split('@')[0] });
+      const response = await register({ email, password });
       
       if (response.success) {
         // Automatically login or redirect to login page
         // Let's try to login immediately for better UX
-        const loginResponse = await authApi.login({ email, password });
+        const loginResponse = await login({ email, password });
         if (loginResponse.success) {
-            router.push('/');
+            router.push('/dashboard');
         } else {
             // Fallback to login page if auto-login fails
             router.push('/auth/login?registered=true');

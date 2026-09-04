@@ -1,5 +1,4 @@
 import apiClient from '@/lib/api';
-import { USE_MOCK_DATA, getMockProject, simulateDelay } from '@/lib/mockData';
 import { Project } from '@/lib/types';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -33,30 +32,11 @@ export function useProject() {
       setError(null);
 
       try {
-        // ========================================
-        // 🔄 MOCK MODE - Sử dụng mock data
-        // ========================================
-        if (USE_MOCK_DATA) {
-          await simulateDelay(300); // Simulate network delay
-          const foundProject = getMockProject(projectId);
-          if (foundProject) {
-            setProject(foundProject);
-          } else {
-            setError('Không tìm thấy dự án');
-          }
+        const response = await apiClient.getProject(projectId);
+        if (response.data) {
+          setProject(response.data);
         } else {
-          // Original API call
-          const response = await apiClient.getProjects();
-          if (response.data) {
-            const foundProject = response.data.find((p: Project) => p.id === projectId);
-            if (foundProject) {
-              setProject(foundProject);
-            } else {
-              setError('Không tìm thấy dự án');
-            }
-          } else {
-            setError('Lỗi khi tải dữ liệu dự án');
-          }
+          setError(response.error || 'Không tìm thấy dự án');
         }
       } catch (err) {
         setError('Lỗi kết nối đến server');

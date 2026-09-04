@@ -4,7 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { Loading } from "@/components/ui";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { useProject } from "@/hooks/useProject";
-import { USE_MOCK_DATA, getMockProjects } from "@/lib/mockData";
+import apiClient from "@/lib/api";
 import { Project } from "@/lib/types";
 import {
     BookMarked,
@@ -53,9 +53,14 @@ function DashboardPageContent() {
 
   // Load all projects for global view
   useEffect(() => {
-    if (USE_MOCK_DATA) {
-      setAllProjects(getMockProjects());
-    }
+    let isActive = true;
+    void apiClient.getProjects().then((response) => {
+      if (isActive && response.data) setAllProjects(response.data);
+    });
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   // Always show Global Dashboard (with optional project highlight)

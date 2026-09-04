@@ -1,5 +1,6 @@
 // Authentication service - Token management and auth API calls
-// Best Practice: Access Token in memory, Refresh Token in localStorage (fallback until backend supports HttpOnly cookies)
+// Access tokens stay in memory; refresh tokens are persisted until the backend
+// moves them to an HttpOnly cookie.
 
 const TOKEN_KEY = 'chatnary_refresh_token';
 const USER_KEY = 'chatnary_user';
@@ -141,7 +142,9 @@ export function getTokenExpiryTime(token: string): number | null {
 // ==================== AUTH API CALLS ====================
 
 // Remove trailing slash from base URL to prevent double slashes
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+const API_BASE_URL = (
+    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'
+).replace(/\/$/, '');
 
 interface BackendResponse<T> {
     statusCode: number;

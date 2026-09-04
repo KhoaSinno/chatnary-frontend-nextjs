@@ -5,8 +5,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import ColorPicker from '@/components/ui/ColorPicker';
 import IconPicker from '@/components/ui/IconPicker';
 import apiClient from '@/lib/api';
-import { USE_MOCK_DATA, createMockProject, deleteMockProject, getMockProjects, simulateDelay, updateMockProject } from '@/lib/mockData';
-import { CreateProjectRequest, Project } from '@/lib/types';
+import { CreateProjectRequest, Project, UpdateProjectRequest } from '@/lib/types';
 import { BookOpen, Clock, Edit, FileText, MessageSquare, Plus, Trash2, Wifi, WifiOff } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -44,25 +43,16 @@ function CreateProjectModal({ onClose, onSubmit }: CreateProjectModalProps) {
         icon: selectedIcon,
       };
 
-      if (USE_MOCK_DATA) {
-        await simulateDelay(500);
-        const newProject = createMockProject(projectData);
-        onSubmit(newProject);
-      } else {
-        const response = await apiClient.createProject(projectData);
-        
-        if (response.error) {
-          alert('Lỗi khi tạo dự án: ' + response.error);
-          return;
-        }
+      const { icon: _icon, ...backendProjectData } = projectData;
+      const response = await apiClient.createProject(backendProjectData);
 
-        if (response.data) {
-          const newProject = {
-            ...response.data,
-            updatedAt: response.data.createdAt,
-          };
-          onSubmit(newProject);
-        }
+      if (response.error) {
+        alert('Lỗi khi tạo dự án: ' + response.error);
+        return;
+      }
+
+      if (response.data) {
+        onSubmit({ ...response.data, icon: selectedIcon });
       }
     } catch (error) {
       alert('Lỗi khi tạo dự án: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'));
@@ -187,34 +177,23 @@ function EditProjectModal({ project, onClose, onSubmit }: EditProjectModalProps)
     setIsLoading(true);
     
     try {
-      const projectData: any = {
+      const projectData: UpdateProjectRequest = {
         name: name.trim(),
         description: description.trim() || undefined,
         color: selectedColor,
         icon: selectedIcon,
       };
 
-      if (USE_MOCK_DATA) {
-        await simulateDelay(400);
-        const updatedProject = updateMockProject(project.id, projectData);
-        if (updatedProject) {
-          onSubmit(updatedProject);
-        }
-      } else {
-        const response = await apiClient.updateProject(project.id, projectData);
-        
-        if (response.error) {
-          alert('Lỗi khi cập nhật dự án: ' + response.error);
-          return;
-        }
+      const { icon: _icon, ...backendProjectData } = projectData;
+      const response = await apiClient.updateProject(project.id, backendProjectData);
 
-        if (response.data) {
-          const updatedProject = {
-            ...response.data,
-            updatedAt: response.data.updatedAt,
-          };
-          onSubmit(updatedProject);
-        }
+      if (response.error) {
+        alert('Lỗi khi cập nhật dự án: ' + response.error);
+        return;
+      }
+
+      if (response.data) {
+        onSubmit({ ...response.data, icon: selectedIcon });
       }
     } catch (error) {
       alert('Lỗi khi cập nhật dự án: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'));
@@ -351,18 +330,12 @@ function NotebookPageContent() {
     
     setIsLoading(true);
     try {
-      if (USE_MOCK_DATA) {
-        await simulateDelay(300);
-        deleteMockProject(id);
-        setProjects(projects.filter(p => p.id !== id));
-      } else {
-        const response = await apiClient.deleteProject(id);
-        if (response.error) {
-          alert('Lỗi khi xóa dự án: ' + response.error);
-          return;
-        }
-        setProjects(projects.filter(p => p.id !== id));
+      const response = await apiClient.deleteProject(id);
+      if (response.error) {
+        alert('Lỗi khi xóa dự án: ' + response.error);
+        return;
       }
+      setProjects((current) => current.filter((project) => project.id !== id));
 
     } catch {
       alert('Lỗi khi xóa dự án');
@@ -377,7 +350,7 @@ function NotebookPageContent() {
   };
 
   const handleUpdateProject = (updatedProject: Project) => {
-    setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
+    setProjects((current) => current.map((project) => project.id === updatedProject.id ? updatedProject : project));
     setShowEditModal(false);
     setEditingProject(null);
   };
@@ -388,23 +361,12 @@ function NotebookPageContent() {
       setIsLoading(true);
       setConnectionError(false);
       try {
-        if (USE_MOCK_DATA) {
-          await simulateDelay(400);
-          const mockProjects = getMockProjects();
-          setProjects(mockProjects);
-          console.log('Mock projects loaded:', mockProjects.length);
-        } else {
-          const response = await apiClient.getProjects();
-          if (response.data) {
-            const apiProjects = response.data.map((project: Project) => ({
-              ...project,
-              updatedAt: project.updatedAt,
-            }));
-            setProjects(apiProjects);
-          } else if (response.error) {
-            setConnectionError(true);
-            console.error('Lỗi API:', response.error);
-          }
+        const response = await apiClient.getProjects();
+        if (response.data) {
+          setProjects(response.data);
+        } else if (response.error) {
+          setConnectionError(true);
+          console.error('Lỗi API:', response.error);
         }
       } catch (error) {
         setConnectionError(true);

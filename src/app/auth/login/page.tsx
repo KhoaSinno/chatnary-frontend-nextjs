@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui';
-import { authApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +27,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await authApi.login({ email, password });
+      const response = await login({ email, password });
       
       if (response.success) {
         // Redirect to global dashboard (no project required)

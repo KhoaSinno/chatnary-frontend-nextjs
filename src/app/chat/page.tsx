@@ -42,6 +42,8 @@ function ChatPageContent() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectSelectionError, setProjectSelectionError] = useState<string | null>(null);
+  const [hasNoProjects, setHasNoProjects] = useState(false);
 
   // Set project name and color for breadcrumb when project loads
   useEffect(() => {
@@ -59,6 +61,8 @@ function ChatPageContent() {
       if (!projectId) {
         try {
           setLoadingProjects(true);
+          setProjectSelectionError(null);
+          setHasNoProjects(false);
           const response = await apiClient.getProjects();
 
           if (response.success && response.data && response.data.length > 0) {
@@ -66,12 +70,11 @@ function ChatPageContent() {
             const firstProject = response.data[0];
             router.push(`/chat?project=${firstProject.id}`);
           } else {
-            // No projects available, redirect to home
-            router.push("/");
+            setHasNoProjects(true);
           }
         } catch (err) {
           console.error("Failed to load projects:", err);
-          router.push("/");
+          setProjectSelectionError("Không thể tải danh sách dự án. Vui lòng thử lại.");
         } finally {
           setLoadingProjects(false);
         }
@@ -159,6 +162,36 @@ function ChatPageContent() {
       setCreating(false);
     }
   };
+
+  if (!projectId && hasNoProjects) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <Card className="max-w-md p-8 text-center">
+            <MessageSquare className="mx-auto mb-4 h-10 w-10 text-violet-600" />
+            <h1 className="mb-2 text-xl font-semibold">Tạo dự án trước khi bắt đầu chat</h1>
+            <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
+              Cuộc trò chuyện luôn thuộc về một dự án. Hãy tạo dự án đầu tiên của bạn.
+            </p>
+            <Button onClick={() => router.push('/notebook')}>Đi tới Dự án</Button>
+          </Card>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!projectId && projectSelectionError) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <Card className="max-w-md p-8 text-center">
+            <h1 className="mb-2 text-xl font-semibold">Không thể mở Chat</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{projectSelectionError}</p>
+          </Card>
+        </div>
+      </MainLayout>
+    );
+  }
 
   if (!projectId || loadingProjects) {
     return (

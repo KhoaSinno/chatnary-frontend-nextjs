@@ -11,7 +11,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   // Define routes that should NOT have the main layout structure (No Sidebar/Header)
-  const isAuthPage = pathname?.startsWith('/auth');
+  const isAuthPage = pathname?.startsWith('/auth') || pathname === '/login' || pathname === '/register';
   const isLandingPage = pathname === '/';
   
   const shouldHideLayout = isAuthPage || isLandingPage;

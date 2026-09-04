@@ -1,12 +1,13 @@
 // API client for Chatnary Backend matching https://chatnary.up.railway.app/docs
 import {
-    USE_MOCK_DATA,
-    createMockChat,
-    deleteMockChat,
-    getMockChatsByProject,
-    simulateDelay,
-    updateMockChat
-} from "@/lib/mockData";
+  USE_MOCK_DATA,
+  createMockChat,
+  deleteMockChat,
+  getMockChatsByProject,
+  simulateDelay,
+  updateMockChat,
+} from '@/lib/mockData';
+import { getAccessToken } from '@/lib/auth';
 import {
     AuthResponse,
     ChatSession,
@@ -20,10 +21,9 @@ import {
     UpdateChatRequest,
     UpdateProjectRequest,
 } from "@/lib/types";
-import Cookies from "js-cookie";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-const COOKIE_NAME = process.env.NEXT_PUBLIC_COOKIE_NAME || "CHATNARY_COOKIE";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 // Generic API Response wrapper
 export interface ApiResponse<T> {
@@ -35,8 +35,26 @@ export interface ApiResponse<T> {
 // Internal Backend Response wrapper
 interface BackendErrorResponse {
   statusCode: number;
-  message: string | string[];
-  error: string;
+  message?: unknown;
+  error?: string;
+}
+
+interface BackendSuccessResponse<T> {
+  statusCode: number;
+  success: true;
+  data: T;
+}
+
+interface BackendProject {
+  id: string;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    projectResources?: number;
+  };
 }
 
 // Extended Request types if needed
@@ -68,6 +86,41 @@ interface ChatMessageResponse {
   chatId: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isBackendSuccessResponse<T>(
+  value: unknown
+): value is BackendSuccessResponse<T> {
+  return (
+    isRecord(value) &&
+    value.success === true &&
+    'data' in value &&
+    typeof value.statusCode === 'number'
+  );
+}
+
+function getBackendErrorMessage(value: unknown, fallback: string): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string').join(', ') || fallback;
+  if (isRecord(value) && typeof value.message === 'string') return value.message;
+  return fallback;
+}
+
+function mapProject(project: BackendProject): Project {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description ?? undefined,
+    color: project.color ?? '#3b82f6',
+    documentsCount: project._count?.projectResources ?? 0,
+    chatsCount: 0,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  };
+}
+
 // ==================== API CLIENT ====================
 
 class ApiClient {
@@ -76,43 +129,24 @@ class ApiClient {
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
-    // ========================================
-    // 🔓 BYPASS LOGIN - SET FAKE TOKEN
-    // TODO: Uncomment dòng bên dưới và comment dòng fake token để bật lại authentication
-    // ========================================
-    // this.token = Cookies.get(COOKIE_NAME) || null;
-    this.token = "fake-token-for-testing"; // Fake token for testing
-    console.log('ApiClient: Initialized. Token from cookie:', this.token ? 'Found' : 'Missing');
+    this.token = null;
   }
 
   // Auth Management
   setToken(token: string) {
     this.token = token;
-    // Important: Set path to '/' so cookie is accessible everywhere
-    Cookies.set(COOKIE_NAME, token, { expires: 7, path: '/' }); 
-    console.log('ApiClient: Token set manually');
   }
 
   clearToken() {
     this.token = null;
-    Cookies.remove(COOKIE_NAME, { path: '/' });
-    console.log('ApiClient: Token cleared');
   }
 
   getToken(): string | null {
-    if (!this.token) {
-        this.token = Cookies.get(COOKIE_NAME) || null;
-    }
-    return this.token;
+    return this.token ?? getAccessToken();
   }
 
   isAuthenticated(): boolean {
-    // ========================================
-    // 🔓 BYPASS LOGIN - ALWAYS RETURN TRUE
-    // TODO: Uncomment dòng bên dưới để bật lại authentication
-    // ========================================
-    return true;
-    // return !!this.getToken();
+    return !!this.getToken();
   }
 
   private createSuccessResponse<T>(data: T): ApiResponse<T> {
@@ -135,13 +169,17 @@ class ApiClient {
         ...options.headers,
       };
 
-      if (this.token) {
-        (headers as any)["Authorization"] = `Bearer ${this.token}`;
+      const token = this.getToken();
+      if (token) {
+        (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
       }
 
       const config: RequestInit = {
         ...options,
         headers,
+        // API data is user-specific and protected by a bearer token. Avoid a
+        // conditional cached response being treated as fresh application data.
+        cache: "no-store",
       };
 
       console.log(`API Request: ${options.method || "GET"} ${url}`);
@@ -155,10 +193,11 @@ class ApiClient {
         let errorMessage = `HTTP ${response.status}`;
         try {
           const errorJson = JSON.parse(errorText) as BackendErrorResponse;
-          errorMessage = Array.isArray(errorJson.message)
-            ? errorJson.message.join(", ")
-            : errorJson.message || errorJson.error || errorMessage;
-        } catch (e) {
+          errorMessage = getBackendErrorMessage(
+            errorJson.message,
+            errorJson.error || errorMessage
+          );
+        } catch {
           errorMessage = errorText || errorMessage;
         }
         console.error("API Error:", errorMessage);
@@ -169,8 +208,12 @@ class ApiClient {
         return this.createSuccessResponse({} as T);
       }
 
-      const responseData = await response.json();
-      return this.createSuccessResponse(responseData);
+      const responseData: unknown = await response.json();
+      if (!isBackendSuccessResponse<T>(responseData)) {
+        return this.createErrorResponse("Unexpected response format from API");
+      }
+
+      return this.createSuccessResponse(responseData.data);
     } catch (error) {
       console.error("Network Error:", error);
       return this.createErrorResponse(
@@ -222,81 +265,53 @@ class ApiClient {
   // ==================== PROJECTS ====================
 
   async getProjects(): Promise<ApiResponse<Project[]>> {
-    // ========================================
-    // 🔄 MOCK MODE - Return mock projects
-    // ========================================
-    if (USE_MOCK_DATA) {
-      const { getMockProjects } = await import("@/lib/mockData");
-      await simulateDelay(300);
-      return this.createSuccessResponse(getMockProjects());
-    }
-    
-    return this.request<Project[]>("/project");
+    const response = await this.request<BackendProject[]>("/project");
+    return response.success && response.data
+      ? this.createSuccessResponse(response.data.map(mapProject))
+      : this.createErrorResponse(response.error || 'Unable to load projects');
   }
 
   async createProject(
     project: CreateProjectRequest
   ): Promise<ApiResponse<Project>> {
-    // ========================================
-    // 🔄 MOCK MODE - Create mock project
-    // ========================================
-    if (USE_MOCK_DATA) {
-      const { createMockProject } = await import("@/lib/mockData");
-      await simulateDelay(400);
-      const newProject = createMockProject(project);
-      return this.createSuccessResponse(newProject);
-    }
-    
-    return this.request<Project>("/project", {
+    const response = await this.request<BackendProject>("/project", {
       method: "POST",
       body: JSON.stringify(project),
     });
+    return response.success && response.data
+      ? this.createSuccessResponse(mapProject(response.data))
+      : this.createErrorResponse(response.error || 'Unable to create project');
   }
 
   async updateProject(
     id: string,
     project: Partial<UpdateProjectRequest>
   ): Promise<ApiResponse<Project>> {
-    // ========================================
-    // 🔄 MOCK MODE - Update mock project
-    // ========================================
-    if (USE_MOCK_DATA) {
-      const { updateMockProject } = await import("@/lib/mockData");
-      await simulateDelay(300);
-      const updatedProject = updateMockProject(id, project);
-      if (updatedProject) {
-        return this.createSuccessResponse(updatedProject);
-      }
-      return this.createErrorResponse('Project not found');
-    }
-    
-    return this.request<Project>(`/project/${id}`, {
+    const response = await this.request<BackendProject>(`/project/${id}`, {
       method: "PATCH",
       body: JSON.stringify(project),
     });
+    return response.success && response.data
+      ? this.createSuccessResponse(mapProject(response.data))
+      : this.createErrorResponse(response.error || 'Unable to update project');
   }
 
   async deleteProject(id: string): Promise<ApiResponse<void>> {
-    // ========================================
-    // 🔄 MOCK MODE - Delete mock project
-    // ========================================
-    if (USE_MOCK_DATA) {
-      const { deleteMockProject } = await import("@/lib/mockData");
-      await simulateDelay(200);
-      const success = deleteMockProject(id);
-      if (success) {
-        return this.createSuccessResponse(undefined as any);
-      }
-      return this.createErrorResponse('Project not found');
-    }
-    
     return this.request<void>(`/project/${id}`, {
       method: "DELETE",
     });
   }
 
   async getProject(id: string): Promise<ApiResponse<Project>> {
-    return this.request<Project>(`/project/${id}`);
+    const projects = await this.getProjects();
+    if (!projects.success || !projects.data) {
+      return this.createErrorResponse(projects.error || 'Unable to load projects');
+    }
+
+    const project = projects.data.find((item) => item.id === id);
+    return project
+      ? this.createSuccessResponse(project)
+      : this.createErrorResponse('Project not found');
   }
 
   // ==================== DOCUMENTS ====================

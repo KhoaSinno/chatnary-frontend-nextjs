@@ -83,6 +83,8 @@ function DocumentsPageContent() {
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectSelectionError, setProjectSelectionError] = useState<string | null>(null);
+  const [hasNoProjects, setHasNoProjects] = useState(false);
 
   // Auto-select first project if no project is specified
   useEffect(() => {
@@ -90,6 +92,8 @@ function DocumentsPageContent() {
       if (!projectId) {
         try {
           setLoadingProjects(true);
+          setProjectSelectionError(null);
+          setHasNoProjects(false);
           const response = await apiClient.getProjects();
 
           if (response.success && response.data && response.data.length > 0) {
@@ -97,12 +101,11 @@ function DocumentsPageContent() {
             const firstProject = response.data[0];
             router.push(`/documents?project=${firstProject.id}`);
           } else {
-            // No projects available, redirect to home
-            router.push("/");
+            setHasNoProjects(true);
           }
         } catch (err) {
           console.error("Failed to load projects:", err);
-          router.push("/");
+          setProjectSelectionError("Không thể tải danh sách dự án. Vui lòng thử lại.");
         } finally {
           setLoadingProjects(false);
         }
@@ -156,6 +159,39 @@ function DocumentsPageContent() {
       console.error("Delete failed:", err);
     }
   };
+
+  if (!projectId && hasNoProjects) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="max-w-md text-center">
+            <h1 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Tạo dự án trước khi tải tài liệu
+            </h1>
+            <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
+              Tài liệu phải được lưu trong một dự án.
+            </p>
+            <Button onClick={() => router.push('/notebook')}>Đi tới Dự án</Button>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!projectId && projectSelectionError) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="max-w-md text-center">
+            <h1 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Không thể mở Tài liệu
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{projectSelectionError}</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   if (!projectId || loadingProjects || projectLoading) {
     return (
