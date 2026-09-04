@@ -123,13 +123,6 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
                 className="w-full h-96 border border-gray-200 dark:border-gray-700 rounded"
               />
             )}
-            {fileType.includes('image') && (
-              <img
-                src=""
-                alt={displayName}
-                className="max-w-full h-auto rounded border border-gray-200 dark:border-gray-700"
-              />
-            )}
           </div>
         ) : (
           <div className="p-8 text-center">
