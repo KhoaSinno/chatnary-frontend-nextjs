@@ -1,7 +1,6 @@
 'use client';
 
 import apiClient from '@/lib/api';
-import { USE_MOCK_DATA, getMockDocument, getMockDocumentsByProject, simulateDelay } from '@/lib/mockData';
 import { Document } from '@/lib/types';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -35,24 +34,14 @@ export function useDocuments({ projectId, autoFetch = true }: UseDocumentsOption
       setLoading(true);
       setError(null);
 
-      // ========================================
-      // 🔄 MOCK MODE - Sử dụng mock data
-      // ========================================
-      if (USE_MOCK_DATA) {
-        await simulateDelay(300); // Simulate network delay
-        const mockDocs = getMockDocumentsByProject(projectId);
-        setDocuments(mockDocs);
-      } else {
-        // Original API call
-        const response = await apiClient.getProjectDocuments(projectId);
+      const response = await apiClient.getProjectDocuments(projectId);
 
-        if (response.error) {
-          setError(response.error);
-          return;
-        }
-
-        setDocuments(response.data || []);
+      if (response.error) {
+        setError(response.error);
+        return;
       }
+
+      setDocuments(response.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi tải documents');
     } finally {
@@ -74,60 +63,15 @@ export function useDocuments({ projectId, autoFetch = true }: UseDocumentsOption
       setUploading(true);
       setError(null);
 
-      // ========================================
-      // 🔄 MOCK MODE - Simulate upload
-      // ========================================
-      if (USE_MOCK_DATA) {
-        await simulateDelay(800); // Simulate upload time
-        const newDocument: Document = {
-          id: `doc-${Date.now()}`,
-          name: file.name,
-          originalFilename: file.name,
-          projectId: projectId,
-          fileSize: file.size,
-          mimeType: file.type,
-          status: 'processing',
-          uploadedBy: 'test-user-id',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          hasContent: false,
-        };
-        console.log('Mock upload successful:', newDocument);
-        setDocuments(prev => [newDocument, ...prev]);
-        
-        // Simulate processing completion after 2 seconds
-        setTimeout(() => {
-          setDocuments(prev => 
-            prev.map(doc => 
-              doc.id === newDocument.id 
-                ? { ...doc, status: 'processed' as const, hasContent: true }
-                : doc
-            )
-          );
-        }, 2000);
-      } else {
-        // Original API call
-        console.log('Calling API uploadDocument...');
-        const response = await apiClient.uploadDocument(projectId, file);
-        console.log('API response:', response);
+      const response = await apiClient.uploadDocument(projectId, file);
 
-        if (response.error) {
-          console.error('API error:', response.error);
-          setError(response.error);
-          throw new Error(response.error);
-        }
-
-        // Add new document to list
-        if (response.data) {
-          console.log('Upload successful, updating documents list');
-          setDocuments(prev => [response.data!, ...prev]);
-        }
-
-        // Refresh to get updated list
-        console.log('Refreshing documents list...');
-        await fetchDocuments();
-        console.log('Upload process completed successfully');
+      if (response.error) {
+        setError(response.error);
+        throw new Error(response.error);
       }
+
+      if (response.data) setDocuments((current) => [response.data!, ...current]);
+      await fetchDocuments();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Có lỗi xảy ra khi upload document';
       console.error('Upload error:', err);
@@ -142,24 +86,14 @@ export function useDocuments({ projectId, autoFetch = true }: UseDocumentsOption
     try {
       setError(null);
 
-      // ========================================
-      // 🔄 MOCK MODE - Simulate delete
-      // ========================================
-      if (USE_MOCK_DATA) {
-        await simulateDelay(200);
-        setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-      } else {
-        // Original API call
-        const response = await apiClient.deleteDocument(documentId);
+      const response = await apiClient.deleteDocument(documentId);
 
-        if (response.error) {
-          setError(response.error);
-          return;
-        }
-
-        // Remove document from list
-        setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      if (response.error) {
+        setError(response.error);
+        return;
       }
+
+      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi xóa document');
     }
@@ -169,23 +103,14 @@ export function useDocuments({ projectId, autoFetch = true }: UseDocumentsOption
     try {
       setError(null);
 
-      // ========================================
-      // 🔄 MOCK MODE - Get mock document
-      // ========================================
-      if (USE_MOCK_DATA) {
-        await simulateDelay(200);
-        return getMockDocument(documentId) || null;
-      } else {
-        // Original API call
-        const response = await apiClient.getDocument(documentId);
+      const response = await apiClient.getDocument(documentId);
 
-        if (response.error) {
-          setError(response.error);
-          return null;
-        }
-
-        return response.data || null;
+      if (response.error) {
+        setError(response.error);
+        return null;
       }
+
+      return response.data || null;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi tải document');
       return null;
@@ -222,6 +147,16 @@ export function useDocuments({ projectId, autoFetch = true }: UseDocumentsOption
       fetchDocuments();
     }
   }, [projectId, autoFetch, fetchDocuments]);
+
+  useEffect(() => {
+    if (!documents.some((document) => document.status === 'processing')) return;
+
+    const pollId = window.setInterval(() => {
+      void fetchDocuments();
+    }, 5000);
+
+    return () => window.clearInterval(pollId);
+  }, [documents, fetchDocuments]);
 
   return {
     documents,

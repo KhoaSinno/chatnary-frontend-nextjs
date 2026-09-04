@@ -5,6 +5,8 @@
 **Frontend baseline:** `dev` at `d768bb8`
 **Backend baseline:** `main` at `98801e2`
 
+**Implementation guide:** Read [REAL_DATA_IMPLEMENTATION_RUNBOOK.md](REAL_DATA_IMPLEMENTATION_RUNBOOK.md) before beginning the remaining Documents or Chat work. It is the detailed, fresher-oriented checklist and definition of done for these phases.
+
 ## Goal
 
 Replace the frontend's runtime mock paths with the live NestJS backend without
@@ -288,3 +290,4 @@ tests so a regression is reproducible without a second production path.
 | 2026-09-04 | 1–2 | API client decodes the Nest response envelope; fake identity and route bypasses removed | `next build` passes |
 | 2026-09-04 | 3 | Dashboard, notebook, and `useProject` now read/write the live project API; wire-to-UI project mapper added | `next build` passes; unauthenticated project endpoint is `401` |
 | 2026-09-04 | 3 | Fixed project creation contract: `userId` is now injected from the JWT after validation, never accepted from the browser. Chat/Documents no longer redirect to landing page when the account has no project. | BE DTO regression test passes; `nest build`; `next build` |
+| 2026-09-04 | 4 | Upload now uses multipart `files` plus JSON `data`; BE returns created documents and ingest job IDs; document hook reads live API data and maps ingest statuses. | BE upload controller regression test; `nest build`; `next build` |

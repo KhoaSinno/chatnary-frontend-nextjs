@@ -3,6 +3,7 @@
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePathname } from 'next/navigation';
 import { ReactNode, Suspense } from 'react';
+import { AuthGuard } from '../auth/AuthGuard';
 import GlobalHeader from './GlobalHeader';
 import Sidebar from './Sidebar';
 
@@ -21,7 +22,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
       {/* Global Header */}
       <Suspense fallback={<div className="h-12 border-b bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800" />}>
         <GlobalHeader />
@@ -39,6 +41,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-    </div>
+      </div>
+    </AuthGuard>
   );
 }

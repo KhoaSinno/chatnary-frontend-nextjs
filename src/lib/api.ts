@@ -57,6 +57,24 @@ interface BackendProject {
   };
 }
 
+interface BackendDocument {
+  id: string;
+  title: string;
+  originalName: string;
+  mimeType?: string | null;
+  size?: number | null;
+  pageCount?: number | null;
+  errorMessage?: string | null;
+  status: 'PENDING' | 'PROCESSING' | 'DONE' | 'ERROR';
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BackendUploadResult {
+  documents: BackendDocument[];
+  jobIds: string[];
+}
+
 // Extended Request types if needed
 export interface SendMessageDto {
   content: string;
@@ -118,6 +136,31 @@ function mapProject(project: BackendProject): Project {
     chatsCount: 0,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
+  };
+}
+
+function mapDocument(document: BackendDocument, projectId: string): Document {
+  const statusByBackend = {
+    PENDING: 'processing',
+    PROCESSING: 'processing',
+    DONE: 'processed',
+    ERROR: 'error',
+  } as const;
+
+  return {
+    id: document.id,
+    name: document.title,
+    originalFilename: document.originalName,
+    projectId,
+    fileSize: document.size ?? undefined,
+    pageCount: document.pageCount ?? undefined,
+    mimeType: document.mimeType ?? undefined,
+    status: statusByBackend[document.status],
+    uploadedBy: '',
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+    processingError: document.errorMessage ?? undefined,
+    hasContent: document.status === 'DONE',
   };
 }
 
@@ -322,15 +365,13 @@ class ApiClient {
   ): Promise<ApiResponse<Document>> {
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      // Ensure projectId is handled if strictly required by backend, though path suggests separating details
-      // But usually uploads need linkage. We will send it.
-      formData.append("projectId", projectId);
+      formData.append("files", file);
+      formData.append("data", JSON.stringify({ projectId }));
 
       const url = `${this.baseUrl}/document/upload/files`;
       const response = await fetch(url, {
         method: "POST",
-        headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+        headers: this.getToken() ? { Authorization: `Bearer ${this.getToken()}` } : {},
         body: formData,
       });
 
@@ -341,8 +382,15 @@ class ApiClient {
         );
       }
 
-      const data = await response.json();
-      return this.createSuccessResponse(data);
+      const payload: unknown = await response.json();
+      if (!isBackendSuccessResponse<BackendUploadResult>(payload)) {
+        return this.createErrorResponse("Unexpected upload response format from API");
+      }
+
+      const document = payload.data.documents[0];
+      return document
+        ? this.createSuccessResponse(mapDocument(document, projectId))
+        : this.createErrorResponse("Upload completed without a document record");
     } catch (error) {
       return this.createErrorResponse(
         error instanceof Error ? error.message : "Unknown error"
@@ -353,20 +401,54 @@ class ApiClient {
   async getProjectDocuments(
     projectId: string
   ): Promise<ApiResponse<Document[]>> {
-    return this.request<Document[]>(`/project/${projectId}/documents`);
+    const response = await this.request<BackendDocument[]>(`/project/${projectId}/documents`);
+    return response.success && response.data
+      ? this.createSuccessResponse(response.data.map((document) => mapDocument(document, projectId)))
+      : this.createErrorResponse(response.error || 'Unable to load documents');
   }
 
   // GET /document/:documentId - Get document detail
   async getDocument(documentId: string): Promise<ApiResponse<Document>> {
-    return this.request<Document>(`/document/${documentId}`);
+    const response = await this.request<BackendDocument>(`/document/${documentId}`);
+    return response.success && response.data
+      ? this.createSuccessResponse(mapDocument(response.data, ''))
+      : this.createErrorResponse(response.error || 'Unable to load document');
   }
 
-  getDocumentDownloadUrl(documentId: string): string {
-    return `${this.baseUrl}/document/${documentId}/download`;
-  }
+  async getDocumentBlob(
+    documentId: string,
+    disposition: 'inline' | 'attachment' = 'inline',
+  ): Promise<ApiResponse<Blob>> {
+    try {
+      const token = this.getToken();
+      if (!token) return this.createErrorResponse('Chưa đăng nhập');
 
-  getDocumentPreviewUrl(documentId: string): string {
-    return `${this.baseUrl}/document/${documentId}/preview`;
+      const response = await fetch(
+        `${this.baseUrl}/document/${documentId}/file?disposition=${disposition}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        },
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        try {
+          const errorJson = JSON.parse(errorText) as BackendErrorResponse;
+          return this.createErrorResponse(
+            getBackendErrorMessage(errorJson.message, `HTTP ${response.status}`),
+          );
+        } catch {
+          return this.createErrorResponse(errorText || `HTTP ${response.status}`);
+        }
+      }
+
+      return this.createSuccessResponse(await response.blob());
+    } catch (error) {
+      return this.createErrorResponse(
+        error instanceof Error ? error.message : 'Không thể tải tài liệu',
+      );
+    }
   }
 
   // DELETE /document/:documentId - Delete document

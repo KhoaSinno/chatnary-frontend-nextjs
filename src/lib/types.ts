@@ -80,6 +80,7 @@ export interface Document {
   projectId: string;
   projectName?: string;
   fileSize?: number;
+  pageCount?: number;
   mimeType?: string;
   status: DocumentStatus;
   uploadedBy: string;

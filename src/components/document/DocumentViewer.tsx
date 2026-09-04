@@ -4,7 +4,7 @@ import { Button } from '@/components/ui';
 import apiClient from '@/lib/api';
 import { Document } from '@/lib/types';
 import { formatDate, formatFileSize } from '@/lib/utils';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface DocumentViewerProps {
   document: Document | null;
@@ -12,20 +12,47 @@ interface DocumentViewerProps {
 }
 
 export default function DocumentViewer({ document, onClose }: DocumentViewerProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
-  // Handle download
-  const handleDownload = () => {
-    if (document) {
-      const downloadUrl = apiClient.getDocumentDownloadUrl(document.id);
-      const link = window.document.createElement('a');
-      link.href = downloadUrl;
-      link.download = document.originalFilename || document.name;
-      window.document.body.appendChild(link);
-      link.click();
-      window.document.body.removeChild(link);
+  useEffect(() => {
+    if (
+      !document ||
+      document.status !== 'processed' ||
+      !document.mimeType?.toLowerCase().includes('pdf')
+    ) {
+      setPreviewUrl(null);
+      setPreviewError(null);
+      setPreviewLoading(false);
+      return;
     }
-  };
+
+    let objectUrl: string | null = null;
+    let active = true;
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    void apiClient.getDocumentBlob(document.id).then((response) => {
+      if (!active) return;
+      if (!response.success || !response.data) {
+        setPreviewError(response.error || 'Không thể tải xem trước');
+        return;
+      }
+      objectUrl = URL.createObjectURL(response.data);
+      setPreviewUrl(objectUrl);
+    }).finally(() => {
+      if (active) setPreviewLoading(false);
+    });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [document?.id, document?.mimeType, document?.status, previewAttempt]);
 
   if (!document) {
     return (
@@ -45,16 +72,37 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
 
   const fileType = document.mimeType?.toLowerCase() || '';
   const displayName = document.originalFilename || document.name;
+  const canPreview = fileType.includes('pdf') && !!previewUrl;
+  const canDownload = document.status === 'processed';
 
-  const canPreview = fileType.includes('pdf') || fileType.includes('image');
+  const handleDownload = async () => {
+    if (!canDownload) return;
+
+    setDownloading(true);
+    setDownloadError(null);
+    const response = await apiClient.getDocumentBlob(document.id, 'attachment');
+    setDownloading(false);
+
+    if (!response.success || !response.data) {
+      setDownloadError(response.error || 'Không thể tải tài liệu');
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(response.data);
+    const link = window.document.createElement('a');
+    link.href = objectUrl;
+    link.download = displayName;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+  };
 
   return (
     <div className="w-1/2 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Đóng xem tài liệu">
+            <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </Button>
@@ -70,18 +118,16 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
           <div className="p-4">
             {fileType.includes('pdf') && (
               <iframe
-                src={apiClient.getDocumentPreviewUrl(document.id)}
+                src={previewUrl}
                 title={`Preview of ${displayName}`}
                 className="w-full h-96 border border-gray-200 dark:border-gray-700 rounded"
-                onLoad={() => setIsLoading(false)}
               />
             )}
             {fileType.includes('image') && (
               <img
-                src={apiClient.getDocumentPreviewUrl(document.id)}
+                src=""
                 alt={displayName}
                 className="max-w-full h-auto rounded border border-gray-200 dark:border-gray-700"
-                onLoad={() => setIsLoading(false)}
               />
             )}
           </div>
@@ -93,17 +139,31 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-              Không thể xem trước
+              {previewLoading ? 'Đang tải xem trước' : 'Không thể xem trước'}
             </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Định dạng tài liệu này không hỗ trợ xem trước trực tiếp
+            <p className="text-gray-600 dark:text-gray-400 mb-4" role={previewError ? 'alert' : undefined}>
+              {previewError || document.processingError || 'Định dạng tài liệu này không hỗ trợ xem trước trực tiếp'}
             </p>
-            <Button variant="outline" size="sm" onClick={handleDownload}>
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {previewError && (
+              <Button variant="ghost" size="sm" onClick={() => setPreviewAttempt((attempt) => attempt + 1)}>
+                Thử lại xem trước
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className={previewError ? 'ml-2' : undefined}
+              onClick={handleDownload}
+              disabled={!canDownload}
+              isLoading={downloading}
+              title={canDownload ? 'Tải file gốc về máy' : 'Tài liệu cần xử lý xong trước khi tải xuống'}
+            >
+              <svg aria-hidden="true" className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Tải xuống
             </Button>
+            {downloadError && <p className="mt-3 text-sm text-red-700 dark:text-red-400" role="alert">{downloadError}</p>}
           </div>
         )}
       </div>
@@ -128,6 +188,12 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
               {formatFileSize(document.fileSize || 0)}
             </span>
           </div>
+          {document.pageCount !== undefined && document.pageCount > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Số trang:</span>
+              <span className="text-gray-900 dark:text-gray-100">{document.pageCount}</span>
+            </div>
+          )}
           
           <div className="flex justify-between">
             <span className="text-gray-600 dark:text-gray-400">Trạng thái:</span>
