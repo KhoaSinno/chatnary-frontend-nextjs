@@ -100,7 +100,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
     <div className="w-1/2 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Đóng xem tài liệu">
             <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -110,7 +110,22 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
             {displayName}
           </h2>
         </div>
+        {canDownload && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            isLoading={downloading}
+            aria-label="Tải file gốc về máy"
+          >
+            <svg aria-hidden="true" className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Tải xuống
+          </Button>
+        )}
       </div>
+      {downloadError && <p className="px-4 pt-3 text-sm text-red-700 dark:text-red-400" role="alert">{downloadError}</p>}
 
       {/* Preview */}
       <div className="flex-1 overflow-auto">
@@ -142,21 +157,6 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
                 Thử lại xem trước
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className={previewError ? 'ml-2' : undefined}
-              onClick={handleDownload}
-              disabled={!canDownload}
-              isLoading={downloading}
-              title={canDownload ? 'Tải file gốc về máy' : 'Tài liệu cần xử lý xong trước khi tải xuống'}
-            >
-              <svg aria-hidden="true" className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Tải xuống
-            </Button>
-            {downloadError && <p className="mt-3 text-sm text-red-700 dark:text-red-400" role="alert">{downloadError}</p>}
           </div>
         )}
       </div>
